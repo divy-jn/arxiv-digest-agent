@@ -11,16 +11,23 @@ from app.arxiv.models import Paper
 from app.exceptions import InputError, RetrievalError
 
 API_URL = "https://export.arxiv.org/api/query"
-ID_PATTERN = re.compile(r"(?:https?://arxiv\.org/(?:abs|pdf)/)?(\d{4}\.\d{4,5})(?:v\d+)?(?:\.pdf)?/?$", re.IGNORECASE)
+ID_PATTERN = re.compile(r"^(?:https?://arxiv\.org/(abs|pdf|html)/)?(\d{4}\.\d{4,5})(v\d+)?(?:\.pdf)?/?$", re.IGNORECASE)
 ATOM = "{http://www.w3.org/2005/Atom}"
+
+
+def parse_arxiv_reference(value: str) -> dict[str, str | None] | None:
+    match = ID_PATTERN.match(value.strip())
+    if not match:
+        return None
+    kind, arxiv_id, version = match.groups()
+    input_kind = f"{kind.lower()}_url" if kind else "id"
+    return {"arxiv_id": arxiv_id, "version": version, "input_kind": input_kind}
 
 
 def normalize_arxiv_id(value: str) -> str | None:
     """Return a canonical arXiv id for an id, abs URL, or pdf URL."""
-    match = ID_PATTERN.fullmatch(value.strip())
-    if not match:
-        return None
-    return match.group(1)
+    ref = parse_arxiv_reference(value)
+    return ref["arxiv_id"] if ref else None
 
 
 def _text(element: ElementTree.Element, tag: str) -> str:
@@ -39,18 +46,21 @@ def parse_entries(xml: str) -> list[Paper]:
     papers: list[Paper] = []
     for entry in root.findall(f"{ATOM}entry"):
         raw_id = _text(entry, "id")
-        arxiv_id = normalize_arxiv_id(raw_id)
-        if not arxiv_id:
+        ref = parse_arxiv_reference(raw_id)
+        if not ref:
             continue
+        arxiv_id = ref["arxiv_id"]
+        version = ref["version"] or ""
         links = entry.findall(f"{ATOM}link")
-        pdf_url = next((link.attrib["href"] for link in links if link.attrib.get("title") == "pdf"), f"https://arxiv.org/pdf/{arxiv_id}")
+        pdf_url = next((link.attrib["href"] for link in links if link.attrib.get("title") == "pdf"), f"https://arxiv.org/pdf/{arxiv_id}{version}")
+        html_url = f"https://arxiv.org/html/{arxiv_id}{version}"
         papers.append(Paper(
             arxiv_id=arxiv_id, title=_text(entry, "title"),
             authors=[(author.findtext(f"{ATOM}name") or "").strip() for author in entry.findall(f"{ATOM}author")],
             summary=_text(entry, "summary"), published=_parse_date(_text(entry, "published")),
             updated=_parse_date(_text(entry, "updated")),
             categories=[category.attrib["term"] for category in entry.findall(f"{ATOM}category") if category.attrib.get("term")],
-            abs_url=f"https://arxiv.org/abs/{arxiv_id}", pdf_url=pdf_url,
+            abs_url=f"https://arxiv.org/abs/{arxiv_id}{version}", pdf_url=pdf_url, html_url=html_url
         ))
     return papers
 

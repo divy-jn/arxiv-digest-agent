@@ -32,7 +32,7 @@ def download_pdf(url: str, destination: Path, timeout_seconds: int = 30) -> Path
             last_error = exc
             if attempt == 0:
                 time.sleep(0.3)
-    if response is None or last_error is not None and not response.ok:
+    if response is None or (last_error is not None and not response.ok):
         raise RetrievalError(f"Could not download paper PDF after retry: {last_error}")
     if not response.content.startswith(b"%PDF"):
         raise RetrievalError("arXiv did not return a valid PDF.")

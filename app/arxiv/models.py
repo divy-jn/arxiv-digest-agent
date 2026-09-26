@@ -15,6 +15,7 @@ class Paper:
     categories: list[str]
     abs_url: str
     pdf_url: str
+    html_url: str | None = None
 
     @property
     def paper_id(self) -> str:
