@@ -36,7 +36,15 @@ def generate_briefing(llm: object, paper: Paper, chunks: list[Chunk]) -> Briefin
     by_section: dict[str, list[Chunk]] = {}
     for chunk in chunks:
         by_section.setdefault(chunk.section, []).append(chunk)
-    section_evidence = "\n\n".join(f"[{section}]\n{section_chunks[0].text[:3500]}" for section, section_chunks in by_section.items())
+    section_evidence_parts = []
+    for section, section_chunks in by_section.items():
+        if len(section_chunks) <= 3:
+            selected = section_chunks
+        else:
+            selected = [section_chunks[0], section_chunks[len(section_chunks) // 2], section_chunks[-1]]
+        text_content = "\n...\n".join(chunk.text for chunk in selected)[:2500]
+        section_evidence_parts.append(f"[{section}]\n{text_content}")
+    section_evidence = "\n\n".join(section_evidence_parts)
     prompt = f"""You are summarizing ONLY the supplied arXiv paper evidence. Return valid JSON with keys: why_it_matters, problem_statement, method, key_results (array), limitations (array), follow_up_questions (array). Do not add facts, measurements, or limitations absent from evidence. If limitations are not stated, say that explicitly as one item.
 
 Paper metadata: {paper.title}\nEvidence:\n{section_evidence[:18000]}"""
