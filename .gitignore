@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+data/*
+!data/.gitkeep
+cache/
+*.pdf
+__pycache__/
+.pytest_cache/
+.venv/
+pip-*.log
+.idea/
+.vscode/

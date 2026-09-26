@@ -1,0 +1,7 @@
+[
+  {"type": "factual", "question": "What problem does this paper address?", "expected": "Grounded answer with an Introduction or Abstract citation."},
+  {"type": "methodology", "question": "How does the proposed method work?", "expected": "Grounded answer with a Method citation."},
+  {"type": "results", "question": "What results does the paper report?", "expected": "Grounded answer with an Experiments or Results citation."},
+  {"type": "limitations", "question": "What limitations do the authors state?", "expected": "Grounded limitation answer or evidence-based refusal."},
+  {"type": "unsupported", "question": "Will this method reduce global energy use by 50% next year?", "expected": "I couldn't find sufficient evidence in the paper to answer that."}
+]
