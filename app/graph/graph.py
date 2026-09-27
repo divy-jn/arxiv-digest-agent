@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
 
-from app.graph.nodes import (Services, arxiv_search, check_evidence, corrective_rewrite, direct_paper, fetch_pdf,
+from app.graph.nodes import (Services, arxiv_search, check_evidence, check_ingestion_cache, corrective_rewrite,
+    direct_paper, fetch_pdf,
     grounded_answer, index_chroma, make_briefing, make_chunks, parse_pdf, query_understanding, rank_and_select,
     retrieve_chunks, validate_parse, retry_parse, parse_failure, refuse)
 from app.graph.state import AgentState
@@ -10,6 +11,15 @@ from app.graph.state import AgentState
 
 def _query_route(state: AgentState) -> str:
     return "direct_paper" if state["query_type"] == "paper" else "arxiv_search"
+
+
+def _ingestion_cache_route(state: AgentState) -> str:
+    """Route based on whether this paper's chunks are already in ChromaDB.
+
+    If ``ingestion_cached`` is True the expensive parse → chunk → embed pipeline
+    is entirely bypassed, saving the sentence-transformer inference cost.
+    """
+    return "generate_briefing" if state.get("ingestion_cached") else "parse_pdf"
 
 
 def _evidence_route(state: AgentState) -> str:
@@ -31,6 +41,7 @@ def build_ingestion_graph(services: Services):
     graph.add_node("arxiv_search", arxiv_search(services))
     graph.add_node("rank_candidates", rank_and_select)
     graph.add_node("fetch_pdf", fetch_pdf(services))
+    graph.add_node("check_ingestion_cache", check_ingestion_cache(services))
     graph.add_node("parse_pdf", parse_pdf)
     graph.add_node("validate_parse", validate_parse)
     graph.add_node("retry_parse", retry_parse)
@@ -43,7 +54,8 @@ def build_ingestion_graph(services: Services):
     graph.add_edge("arxiv_search", "rank_candidates")
     graph.add_edge("direct_paper", "fetch_pdf")
     graph.add_edge("rank_candidates", "fetch_pdf")
-    graph.add_edge("fetch_pdf", "parse_pdf")
+    graph.add_edge("fetch_pdf", "check_ingestion_cache")
+    graph.add_conditional_edges("check_ingestion_cache", _ingestion_cache_route, {"generate_briefing": "generate_briefing", "parse_pdf": "parse_pdf"})
     graph.add_edge("parse_pdf", "validate_parse")
     graph.add_conditional_edges("validate_parse", _parse_route, {"chunk": "chunk_paper", "retry": "retry_parse", "fail": "parse_failure"})
     graph.add_edge("retry_parse", "validate_parse")
