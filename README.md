@@ -149,69 +149,96 @@ Direct-paper examples:
 
 ```text
 Enter a topic or arXiv ID/URL:
-> 2603.13942
+> 1706.03762
 ```
 
-### Briefing output (abridged)
+### Briefing output
 
-```text
-EXECUTIVE BRIEFING
-------------------------------------------------
-Title: KIVI: A Tuning-Free Asymmetric 2bit Quantization for KV Cache
-Authors: Zirui Liu, Jiayi Yuan, Hongye Jin, Shaochen Zhong, ...
-arXiv: 2603.13942  |  Published: 2024-01-xx
+```markdown
+# Attention Is All You Need
 
-Why this paper matters:
-  Transformer inference on long-context LLMs is bottlenecked by KV-cache
-  memory. KIVI compresses the cache to 2 bits per element without fine-tuning.
+**Authors:** Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit,
+Llion Jones, Aidan N. Gomez, Lukasz Kaiser, Illia Polosukhin
+**arXiv:** 1706.03762
+**Published:** 2017-06-12
+**Link:** https://arxiv.org/abs/1706.03762v7
 
-Problem: KV-cache memory grows linearly with sequence length...
-Method:
-  - Per-channel quantization for keys; per-token for values
-  - Sliding window retains recent tokens in full precision
-  - Group-size tuning balances accuracy vs. compression
+## Why this paper matters
+The paper introduces the Transformer, the first sequence‑to‑sequence model
+that completely replaces recurrent and convolutional layers with attention
+mechanisms. By eliminating sequential dependencies, the model enables far
+greater parallelism, dramatically reduces training time, and achieves new
+state‑of‑the‑art translation quality, surpassing even ensembles of previous
+models.
 
-Key claims:
-  - 2.6× peak memory reduction with < 0.1 perplexity increase on LLaMA...
+## Problem statement
+Existing high‑performing sequence transduction models rely on recurrent neural
+networks (RNNs) or convolutions, which process tokens sequentially. This
+inherent sequential computation limits parallelization, increases training
+cost, and hampers learning of long‑range dependencies, especially for long
+sequences.
 
-Limitations:
-  - Evaluated on autoregressive LLMs only; encoder models untested...
-  - Hardware-specific gains depend on kernel support...
+## Method / approach
+The authors propose the Transformer architecture, an encoder‑decoder model
+built from stacked layers of multi‑head self‑attention and position‑wise
+feed‑forward networks. Both encoder and decoder consist of N=6 identical
+layers with residual connections and layer normalization. The decoder adds
+a masked self‑attention sub‑layer and an encoder‑decoder attention sub‑layer.
+Training uses the Adam optimizer with a warm‑up learning‑rate schedule,
+dropout (p=0.1), and label smoothing (ε_ls=0.1).
 
-Suggested follow-up questions:
-  1. How does the sliding window size affect accuracy?
-  2. What is the latency impact of per-channel vs per-token quantization?
-  3. How does KIVI compare to GPTQ or AWQ for KV caches specifically?
+## Key results / claims
+- Achieves 28.4 BLEU on WMT 2014 English‑German, improving over the previous
+  best (including ensembles) by >2 BLEU.
+- Achieves 41.0 BLEU on WMT 2014 English‑French, setting a new single‑model
+  state‑of‑the‑art.
+- Base model trained for 12 hours on 8 GPUs; big model trained for 3.5 days
+  on 8 GPUs — a small fraction of prior models' training cost.
+- Demonstrates good generalization to English constituency parsing.
+
+## Limitations
+- Self‑attention reduces effective resolution due to averaging over
+  attention‑weighted positions; mitigated by multi‑head attention but still
+  noted as a trade‑off.
+- Computational complexity of self‑attention grows with sequence length;
+  faster than recurrence only when sequence length n < representation
+  dimension d.
+- Handling very long inputs may require restricting attention to local
+  neighborhoods, which the authors plan to investigate in future work.
+
+## Suggested follow-up questions
+- How does the Transformer perform on tasks with much longer input sequences?
+- What are the effects of varying the number of attention heads?
+- Can the architecture be adapted to non‑text modalities such as images or
+  audio?
 ```
 
 ### Sample QA exchanges
 
 ```text
 Ask a question:
-> How does the method handle the key cache differently from the value cache?
+> what is encoder
 
 Answer:
-The authors apply per-channel quantization to key tensors because key
-channels exhibit large-magnitude outliers that dominate the quantization
-range. For value tensors, they use per-token quantization since the
-distribution is more uniform across tokens but varies across channels.
+The encoder is the first half of the Transformer's encoder‑decoder
+architecture. It maps an input sequence of symbol representations
+(x_1,…,x_n) to a sequence of continuous representations z=(z_1,…,z_n).
+
+In the Transformer the encoder is built from a stack of N = 6 identical
+layers. Each layer contains two sub‑layers:
+1. a multi‑head self‑attention mechanism, and
+2. a position‑wise fully‑connected feed‑forward network.
+
+Both sub‑layers are wrapped with residual connections and layer‑
+normalization, and all sub‑layers output vectors of dimension d_model=512.
 
 Evidence:
-- Methodology, p. 5
+- 3Model Architecture, p. 1
+- 7Conclusion, p. 1
+- 2Background, p. 1
 
 Ask a question:
-> What is the perplexity impact on LLaMA-2-13B?
-
-Answer:
-Table 2 reports that KIVI with 2-bit KV-cache quantization increases
-perplexity by approximately 0.08 on WikiText-2 for LLaMA-2-13B, compared
-to the FP16 baseline.
-
-Evidence:
-- Key Results, p. 7
-
-Ask a question:
-> What is the capital of France?
+> what is capital of india
 
 Answer:
 I couldn't find sufficient evidence in the paper to answer that.
