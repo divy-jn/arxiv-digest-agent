@@ -11,3 +11,6 @@ __pycache__/
 pip-*.log
 .idea/
 .vscode/
+graphify-out/
+scratch/
+VIDEO_SCRIPT.md
