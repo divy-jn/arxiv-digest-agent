@@ -21,8 +21,16 @@ class Services:
 
 
 def query_understanding(state: dict, _: object = None) -> dict:
-    candidate = normalize_arxiv_id(state["user_input"])
-    return {"query_type": "paper" if candidate else "topic", "arxiv_id": candidate or ""}
+    from app.arxiv.client import parse_arxiv_reference
+    ref = parse_arxiv_reference(state["user_input"])
+    if ref:
+        return {
+            "query_type": "paper", 
+            "arxiv_id": ref["arxiv_id"], 
+            "input_kind": ref["input_kind"], 
+            "paper_version": ref["version"]
+        }
+    return {"query_type": "topic", "arxiv_id": ""}
 
 
 def direct_paper(services: Services):
@@ -50,13 +58,47 @@ def fetch_pdf(services: Services):
     def run(state: dict) -> dict:
         paper = state["selected_paper"]
         path = services.settings.data_dir / "papers" / f"{paper.paper_id}.pdf"
-        return {"pdf_path": str(download_pdf(paper.pdf_url, path))}
+        if not (path.exists() and path.stat().st_size > 10000):
+            download_pdf(paper.pdf_url, path)
+        return {"pdf_path": str(path), "html_url": getattr(paper, "html_url", None)}
+    return run
+
+
+def check_ingestion_cache(services: Services):
+    """Skip parse/chunk/index if this paper's chunks are already in ChromaDB.
+
+    Design rationale:
+    The original pipeline always re-parses the PDF and re-computes embeddings,
+    relying on ChromaDB's ``upsert`` for idempotency.  While correct, this wastes
+    significant CPU time on sentence-transformer inference for every run.  By
+    querying the collection metadata *before* the expensive nodes, we can short-
+    circuit directly to briefing generation when the paper is already indexed.
+
+    The check uses ``ChromaStore.has_paper()`` — a metadata-only query that
+    requires zero embedding computation.
+    """
+    def run(state: dict) -> dict:
+        paper = state["selected_paper"]
+        already_indexed = services.store.has_paper(paper.paper_id)
+        if already_indexed:
+            chunks = services.store.get_chunks(paper.paper_id)
+            return {"ingestion_cached": True, "chunks": chunks}
+        return {"ingestion_cached": False}
     return run
 
 
 def parse_pdf(state: dict) -> dict:
     try:
-        return {"parsed_sections": extract_pdf(Path(state["pdf_path"])), "parse_valid": True}
+        from app.pdf.html_extractor import extract_html
+        html_url = state.get("html_url")
+        if html_url:
+            try:
+                sections = extract_html(html_url)
+                if sections:
+                    return {"parsed_sections": sections, "parse_valid": True, "source_type": "html"}
+            except Exception:
+                pass
+        return {"parsed_sections": extract_pdf(Path(state["pdf_path"])), "parse_valid": True, "source_type": "pdf"}
     except Exception as exc:
         return {"parse_valid": False, "errors": [*state.get("errors", []), str(exc)]}
 
@@ -69,7 +111,7 @@ def validate_parse(state: dict) -> dict:
 def retry_parse(state: dict) -> dict:
     """One bounded parse retry handles transient filesystem/PDF-reader failures."""
     try:
-        return {"parsed_sections": extract_pdf(Path(state["pdf_path"])), "parse_valid": True, "retry_count": state.get("retry_count", 0) + 1}
+        return {"parsed_sections": extract_pdf(Path(state["pdf_path"])), "parse_valid": True, "source_type": "pdf", "retry_count": state.get("retry_count", 0) + 1}
     except Exception as exc:
         return {"parse_valid": False, "retry_count": state.get("retry_count", 0) + 1, "errors": [*state.get("errors", []), str(exc)]}
 
